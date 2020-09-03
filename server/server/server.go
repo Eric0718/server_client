@@ -489,7 +489,7 @@ func verifyEmailFormat(email string) bool {
 }
 
 func verifyPassword(s string) bool {
-	var hasNumber, hasUpperCase, hasLowercase, checkLength bool
+	var hasNumber, hasUpperCase, hasLowercase bool
 	for _, c := range s {
 		switch {
 		case unicode.IsNumber(c):
@@ -504,10 +504,8 @@ func verifyPassword(s string) bool {
 			// 	hasSpecial = true
 		}
 	}
-	if len(s) >= 6 {
-		checkLength = true
-	}
-	return hasNumber && checkLength && hasUpperCase || hasLowercase //&& hasSpecial
+
+	return hasNumber && hasUpperCase || hasLowercase //&& hasSpecial
 }
 
 func checkUserInfo(email, password []byte) int {
@@ -518,7 +516,7 @@ func checkUserInfo(email, password []byte) int {
 		return WrongEmail
 	}
 
-	if len(password) <= 0 {
+	if len(password) <= 6 {
 		return WrongPassword
 	}
 	if !verifyPassword(string(password)) {
