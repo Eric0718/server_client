@@ -74,7 +74,7 @@ const (
 	port = "465"
 )
 
-const totalLimit = 500001
+const minBalanceLimit = 500001
 
 var sendcode string
 var sendEmailAddr string
@@ -153,7 +153,7 @@ func (s *Server) Register(ctx *fasthttp.RequestCtx) {
 	ctx.Response.SetStatusCode(http.StatusOK)
 	sendEmailAddr = ""
 	sendcode = ""
-	log.Printf("Register Ok!\n")
+	log.Printf("Register user %s Ok!\n", email)
 	return
 }
 
@@ -167,13 +167,13 @@ func (s *Server) SendEmail(ctx *fasthttp.RequestCtx) {
 	}()
 
 	args := ctx.QueryArgs()
-	email := args.Peek(eml)
+	emailTo := args.Peek(eml)
 
 	//Alrady registered email can not be registered.
-	value, err := s.mget(eAddr, email)
+	value, err := s.mget(eAddr, emailTo)
 	if err != nil {
 		if err.Error() != notExist {
-			log.Printf("Register error:%v,email:%v\n", err, string(value))
+			log.Printf("Register error:%v,emailTo:%v\n", err, string(value))
 			result.Code = RegisterError
 			result.Message = err.Error()
 			ctx.Response.SetStatusCode(http.StatusOK)
@@ -181,16 +181,16 @@ func (s *Server) SendEmail(ctx *fasthttp.RequestCtx) {
 		}
 	}
 	if len(value) > 0 {
-		log.Printf("Register error:The email addrss[%v] already in use.\n", string(email))
+		log.Printf("Register error:The email addrss[%v] already in use.\n", string(emailTo))
 		result.Code = UsedEmail
-		result.Message = fmt.Errorf("The email addrss[%v] already in use", string(email)).Error()
+		result.Message = fmt.Errorf("The email addrss[%v] already in use", string(emailTo)).Error()
 		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
 	//send email
 	sendcode = genValidateCode(6) //随机生成6位验证码
-	if err := s.sendEmail(string(email), sendcode); err != nil {
+	if err := s.sendEmail(string(emailTo), sendcode); err != nil {
 		log.Printf("Register send email error:%v.\n", err)
 		result.Code = SendEmailErr
 		result.Message = fmt.Errorf("Send email error:%v", err).Error()
@@ -198,11 +198,12 @@ func (s *Server) SendEmail(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	sendEmailAddr = string(emailTo)
 	result.Code = SuccessCode
 	result.Message = "SendEmailOk"
 	ctx.Response.SetStatusCode(http.StatusOK)
-	sendEmailAddr = string(email)
-	log.Printf("Send Email Ok!\n")
+
+	log.Printf("send email successfully! From: %v,To: %v\n", user, string(emailTo))
 	return
 }
 
@@ -325,10 +326,10 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if bl.Balnce < uint64(totalLimit) {
-		log.Printf("Error: bl.Balnce < uint64(500001) error")
+	if bl.Balnce < uint64(minBalanceLimit) {
+		log.Printf("Error: The address's Balnce[%v] should > [500001]\n", bl.Balnce)
 		result.Code = CreatContractErr
-		result.Message = fmt.Errorf("CreatContract error: bl.Balnce < uint64(500001) error").Error()
+		result.Message = fmt.Errorf("CreatContract error: The address's Balnce[%v] should > [500001]", bl.Balnce).Error()
 		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
@@ -352,8 +353,8 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 
 	ctc, err := client.CreateContract(cx, &message.ReqTokenCreate{
 		From: string(address), To: "KtoCBhhMUrmcD5G5dmjLQJCiPeJLMfCt8EJE2ordaPc5B7d",
-		Amount: uint64(totalLimit), Nonce: res.Nonce,
-		Fee: uint64(totalLimit), Total: uint64(tt),
+		Amount: uint64(minBalanceLimit), Nonce: res.Nonce,
+		Fee: uint64(minBalanceLimit), Total: uint64(tt),
 		Priv: string(priv), Symbol: string(symbol),
 	})
 	if err != nil {
@@ -385,8 +386,8 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 
 	tct, err := client.MintToken(cx, &message.ReqTokenCreate{
 		From: string(address), To: "KtoCBhhMUrmcD5G5dmjLQJCiPeJLMfCt8EJE2ordaPc5B7d",
-		Amount: uint64(totalLimit), Nonce: res.Nonce + 1,
-		Fee: uint64(totalLimit), Total: uint64(tt),
+		Amount: uint64(minBalanceLimit), Nonce: res.Nonce + 1,
+		Fee: uint64(minBalanceLimit), Total: uint64(tt),
 		Priv: string(priv), Symbol: string(symbol),
 	})
 	if err != nil {
