@@ -15,8 +15,11 @@ type resultInfo struct {
 
 func main() {
 	//使用Get方法获取服务器响应包数据
-	//resp, err := http.Get("http://localhost:4545/register?email=123@qq&password=Lzl123456")
-	resp, err := http.Get("http://localhost:4545/load?email=123@qq&password=Lzl12345")
+	//resp, err := http.Get("http://106.12.186.114:4545/sendEmail?email=1434797171@qq.com")
+	//resp, err := http.Get("http://localhost:4545/sendEmail?email=1434797171@qq.com")
+	//resp, err := http.Get("http://localhost:4545/register?email=1587774150@qq.com&password=Lzl123456&verifycode=618503")
+	//resp, err := http.Get("http://localhost:4545/login?email=123@qq&password=Lzl12345")
+	resp, err := http.Get("http://106.12.186.114:4545/creatContract?address=Kto9zD2nUTtWUY29gSidmhuHPURZkoP8cLNiPG1BKpUEJUG&private=5jYL1xv4ixZj3EC2bYbXJ41gsyNeAPx921hBj7Wz9WJo26zC8Lv8WZ4oVdyiLYBBNEFiZfUqzxAusJNZK7T98Y32&tokenName=test4&symbol=YFII&total=2100000000000000000")
 
 	//resp, err := http.Get("http://localhost:4545/register?email=123456@qq&password=Lzl123456")
 	//resp, err := http.Get("http://localhost:4545/load?email=email=123456@qq&password=Lzl12345")
@@ -44,5 +47,5 @@ func main() {
 		fmt.Println(err)
 	}
 	fmt.Println(string(content))
-	fmt.Printf("code:%v,message:%v\n", res.Code, res.Message)
+	//fmt.Printf("code:%v,message:%v\n", res.Code, res.Message)
 }

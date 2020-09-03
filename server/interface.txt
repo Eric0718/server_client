@@ -1,0 +1,12 @@
+http.Get("http://106.12.186.114:4545/sendEmail?email=***")
+http.Get("http://106.12.186.114:4545/register?email=***&password=***&verifycode=***")
+http.Get("http://106.12.186.114:4545/login?email=***&password=***")
+http.Get("http://106.12.186.114:4545/creatContract?address=***&private=***&tokenName=***&symbol=***&total=***")
+
+//email info: "username":"kortho@yeah.net","password":"MYVELWIDTMAQFVEH","host":"smtp.yeah.net","port":25
+const (
+	username = "kortho@yeah.net"
+	password = "MYVELWIDTMAQFVEH"
+	host     = "smtp.yeah.net"
+	port     = 25
+)
