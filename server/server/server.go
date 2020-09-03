@@ -65,7 +65,13 @@ const (
 	notExist   = "NotExist"
 	registerOk = "RegisterOk"
 	loadOk     = "loadOk"
-	leaderaddr = "106.12.186.120:8545"
+	leaderaddr = "106.12.186.120:8545" //address on blockchain line
+
+	//from-email info
+	user = "wallet@ktoken.ws"
+	pass = "Ktoken88888"
+	host = "smtp.qiye.aliyun.com"
+	port = "465"
 )
 
 const totalLimit = 500001
@@ -104,7 +110,7 @@ func (s *Server) Register(ctx *fasthttp.RequestCtx) {
 		log.Printf("email address not matched:first time[%s],second time[%s]\n", sendEmailAddr, string(email))
 		result.Code = WrongEmail
 		result.Message = fmt.Errorf("email address not matched:first time[%s],second time[%s]", sendEmailAddr, string(email)).Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
@@ -112,7 +118,7 @@ func (s *Server) Register(ctx *fasthttp.RequestCtx) {
 		log.Printf("verify code not matched:sendcode[%s],inputcode[%s]\n", sendcode, verifycode)
 		result.Code = RegisterError
 		result.Message = fmt.Errorf("verify code not matched:sendcode[%s],inputcode[%s]", sendcode, verifycode).Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
@@ -121,27 +127,16 @@ func (s *Server) Register(ctx *fasthttp.RequestCtx) {
 		log.Printf("Register checkUserInfo: Wrong email or password.\n")
 		result.Code = statusCode
 		result.Message = "Wrong email or password"
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
-
-	// tx := s.Db.NewTransaction(true)
-	// defer tx.Discard()
-	// if err := set(tx, email, password); err != nil {
-	// 	log.Printf("Register new user error:%v\n", err)
-	// 	result.Code = RegisterError
-	// 	result.Message = err.Error()
-	// 	ctx.Response.SetStatusCode(http.StatusBadRequest)
-	// 	return
-	// }
-	// tx.Commit()
 
 	//set email -> password
 	if err := s.mset(usersInfo, email, password); err != nil {
 		log.Printf("Set map '[email]password' error:%v\n", err)
 		result.Code = RegisterError
 		result.Message = err.Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 	//set email -> email
@@ -149,7 +144,7 @@ func (s *Server) Register(ctx *fasthttp.RequestCtx) {
 		log.Printf("Set map '[email]email' error:%v\n", err)
 		result.Code = RegisterError
 		result.Message = err.Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
@@ -181,7 +176,7 @@ func (s *Server) SendEmail(ctx *fasthttp.RequestCtx) {
 			log.Printf("Register error:%v,email:%v\n", err, string(value))
 			result.Code = RegisterError
 			result.Message = err.Error()
-			ctx.Response.SetStatusCode(http.StatusBadRequest)
+			ctx.Response.SetStatusCode(http.StatusOK)
 			return
 		}
 	}
@@ -189,7 +184,7 @@ func (s *Server) SendEmail(ctx *fasthttp.RequestCtx) {
 		log.Printf("Register error:The email addrss[%v] already in use.\n", string(email))
 		result.Code = UsedEmail
 		result.Message = fmt.Errorf("The email addrss[%v] already in use", string(email)).Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
@@ -199,7 +194,7 @@ func (s *Server) SendEmail(ctx *fasthttp.RequestCtx) {
 		log.Printf("Register send email error:%v.\n", err)
 		result.Code = SendEmailErr
 		result.Message = fmt.Errorf("Send email error:%v", err).Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
@@ -225,19 +220,6 @@ func (s *Server) Login(ctx *fasthttp.RequestCtx) {
 	email := args.Peek(eml)
 	password := args.Peek(psw)
 
-	// statusCode := checkUserInfo(email, password)
-	// if statusCode != 0 {
-	// 	log.Printf("Login checkUserInfo: error code %v.\n", statusCode)
-	// 	result.Code = statusCode
-	// 	result.Message = "WrongParameters"
-	// 	ctx.Response.SetStatusCode(http.StatusBadRequest)
-	// 	return
-	// }
-
-	// tx := s.Db.NewTransaction(true)
-	// defer tx.Discard()
-	// value, err := get(tx, email)
-
 	value, err := s.mget(usersInfo, email)
 	if err != nil {
 		log.Printf("Login error:%v\n", err)
@@ -247,7 +229,7 @@ func (s *Server) Login(ctx *fasthttp.RequestCtx) {
 			result.Code = LoadError
 		}
 		result.Message = err.Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
@@ -255,7 +237,7 @@ func (s *Server) Login(ctx *fasthttp.RequestCtx) {
 		log.Printf("Login error: wrong password!\n")
 		result.Code = WrongPassword
 		result.Message = "WrongPassword"
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 	result.Code = SuccessCode
@@ -290,7 +272,7 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 			log.Printf("CreatContract error:%v,tokenName:%v\n", err, string(tokenName))
 			result.Code = CreatContractErr
 			result.Message = err.Error()
-			ctx.Response.SetStatusCode(http.StatusBadRequest)
+			ctx.Response.SetStatusCode(http.StatusOK)
 			return
 		}
 	}
@@ -298,7 +280,7 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 		log.Printf("CreatContract error:The tokenName[%v] already Existing.\n", string(tokenName))
 		result.Code = CreatContractErr
 		result.Message = fmt.Errorf("Error:The tokenName[%v] already Existing", string(tokenName)).Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
@@ -309,7 +291,7 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 			log.Printf("CreatContract error:%v,symbol:%v\n", err, string(symbol))
 			result.Code = CreatContractErr
 			result.Message = err.Error()
-			ctx.Response.SetStatusCode(http.StatusBadRequest)
+			ctx.Response.SetStatusCode(http.StatusOK)
 			return
 		}
 	}
@@ -317,7 +299,7 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 		log.Printf("CreatContract error:The symbol[%v] already Existing.\n", string(symbol))
 		result.Code = CreatContractErr
 		result.Message = fmt.Errorf("Error:The symbol[%v] already Existing", string(symbol)).Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
@@ -326,9 +308,10 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 		log.Printf("grpc Dial error:%v\n", err)
 		result.Code = CreatContractErr
 		result.Message = fmt.Errorf("grpc Dial error:%v", err).Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
+	defer conn.Close()
 
 	client := message.NewGreeterClient(conn)
 	cx := context.Background()
@@ -338,7 +321,7 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 		log.Printf("GetBalance error:%v\n", err)
 		result.Code = CreatContractErr
 		result.Message = fmt.Errorf("CreatContract client.GetBalance error:%v", err).Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
@@ -346,7 +329,7 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 		log.Printf("Error: bl.Balnce < uint64(500001) error")
 		result.Code = CreatContractErr
 		result.Message = fmt.Errorf("CreatContract error: bl.Balnce < uint64(500001) error").Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
@@ -355,7 +338,7 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 		log.Printf("GetAddressNonceAt error:%v\n", err)
 		result.Code = CreatContractErr
 		result.Message = fmt.Errorf("CreatContract GetAddressNonceAt error:%v", err).Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 	tt, err := strconv.ParseInt(string(total), 10, 64)
@@ -363,7 +346,7 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 		log.Printf("strconv.ParseInt error:%v", err)
 		result.Code = CreatContractErr
 		result.Message = fmt.Errorf("CreatContract strconv.ParseInt error:%v", err).Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
@@ -377,17 +360,17 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 		log.Printf("CreatContract error:%v", err)
 		result.Code = CreatContractErr
 		result.Message = fmt.Errorf("CreatContract error:%v", err).Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
-	breakC := time.After(time.Second * 10) //check the creat hash whether on chain or not.
+	breakC := time.After(time.Second * 20) //check the creat hash whether on chain or not.
 	for {
 		select {
 		case <-breakC: //time out,return
 			log.Printf("CreatContract check creat hash error:timeout,creat hash:%v\n", ctc.Hash)
 			result.Code = CreatContractErr
 			result.Message = fmt.Errorf("CreatContract check creat hash error:timeout,creat hash:%v", ctc.Hash).Error()
-			ctx.Response.SetStatusCode(http.StatusBadRequest)
+			ctx.Response.SetStatusCode(http.StatusOK)
 			return
 		case <-time.After(time.Millisecond * 100):
 			if len(ctc.Hash) > 0 {
@@ -410,18 +393,18 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 		log.Printf("MintToken error:%v", err)
 		result.Code = CreatContractErr
 		result.Message = fmt.Errorf("MintToken error:%v", err).Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
-	breakCH := time.After(time.Second * 10) //check the mint hash whether on chain or not.
+	breakCH := time.After(time.Second * 20) //check the mint hash whether on chain or not.
 	for {
 		select {
 		case <-breakCH: //time out,return
 			log.Printf("CreatContract check mint hash error:timeout,mint hash:%v\n", tct.Hash)
 			result.Code = CreatContractErr
 			result.Message = fmt.Errorf("CreatContract check mint hash error:timeout,mint hash:%v", tct.Hash).Error()
-			ctx.Response.SetStatusCode(http.StatusBadRequest)
+			ctx.Response.SetStatusCode(http.StatusOK)
 			return
 		case <-time.After(time.Millisecond * 100):
 			if len(tct.Hash) > 0 {
@@ -440,7 +423,7 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 		log.Printf("Set map '[tokenName]tokenName' error:%v\n", err)
 		result.Code = CreatContractErr
 		result.Message = err.Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 	//set symbol -> symbol
@@ -448,7 +431,7 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 		log.Printf("Set map '[symbol]symbol' error:%v\n", err)
 		result.Code = CreatContractErr
 		result.Message = err.Error()
-		ctx.Response.SetStatusCode(http.StatusBadRequest)
+		ctx.Response.SetStatusCode(http.StatusOK)
 		return
 	}
 
@@ -461,39 +444,11 @@ func (s *Server) CreatContract(ctx *fasthttp.RequestCtx) {
 }
 
 func (s *Server) sendEmail(mailTo string, code string) error {
-
-	//config := `{"username":"kortho@yeah.net","password":"MYVELWIDTMAQFVEH","host":"smtp.yeah.net","port":25}`
-	// config := `{"username":"wallet@ktoken.ws","password":"Ktoken88888","host":"smtp.qiye.aliyun.com","port":465}`
-	// email := utils.NewEMail(config)
-	// fmt.Println(mailTo, config)
-	// //内容配置
-	// email.Subject = "账户注册邮箱验证"
-
-	// //email.From = "kortho@yeah.net"
-	// email.From = "wallet@ktoken.ws"
-
-	// email.To = []string{mailTo}
-	// email.Text = code
-	// //发送
-	// err := email.Send()
-	// if err != nil {
-	// 	return err
-	// }
-	// return nil
-
-	//定义邮箱服务器连接信息，如果是网易邮箱 pass填密码，qq邮箱填授权码
-	// mailConn := map[string]string{
-	// 	"user": "kortho@yeah.net",
-	// 	"pass": "myc12345", //myc12345/MYVELWIDTMAQFVEH
-	// 	"host": "smtp.yeah.net",
-	// 	"port": "25",
-	// }
-
 	mailConn := map[string]string{
-		"user": "wallet@ktoken.ws",
-		"pass": "Ktoken88888", //myc12345/MYVELWIDTMAQFVEH
-		"host": "smtp.qiye.aliyun.com",
-		"port": "465",
+		"user": user,
+		"pass": pass,
+		"host": host,
+		"port": port,
 	}
 
 	port, err := strconv.Atoi(mailConn["port"]) //转换端口类型为int
@@ -502,16 +457,17 @@ func (s *Server) sendEmail(mailTo string, code string) error {
 	}
 
 	strMsg := `<div style="background:#f5f5f5;padding:48px 0;">
-<div style="width:665px;margin:0 auto;border:1px solid #dcdcdc;background:#ffffff">
-<h2 style="height:56px;line-height:56px;margin:0;color:#ffffff;font-size:20px;background:#40caba;padding-left:30px;font-weight:normal">【K_token】</h2>
-<div style="padding:50px 0;margin:0 30px;font-size:13px;border-bottom:1px solid #ebebeb;">
-<h3 style="color:#000000;font-size:15px;margin:0;margin-bottom:4px;">亲爱的用户</h3>
-   您正在验证身份，验证码是：
-<b style="font-size:26px;color:#40caba;margin-bottom:20px;display:block;margin-top:10px;">` + code + `</b>
-5分钟内有效，为了您的帐号安全，请勿泄露给他人。</div>
-<div style="color:#898989;font-size:10px;background:#fcfcfc;padding:18px 30px;">本邮件由系统自动发出，请勿直接回复。 谢谢！</div>
-</div>
-</div>`
+				<div style="width:665px;margin:0 auto;border:1px solid #dcdcdc;background:#ffffff">
+				<h2 style="height:56px;line-height:56px;margin:0;color:#ffffff;font-size:20px;background:#40caba;padding-left:30px;font-weight:normal">【Kortho】</h2>
+				<div style="padding:50px 0;margin:0 30px;font-size:13px;border-bottom:1px solid #ebebeb;">
+				<h3 style="color:#000000;font-size:15px;margin:0;margin-bottom:4px;">亲爱的用户</h3>
+					您正在验证身份，验证码是：
+				<b style="font-size:26px;color:#40caba;margin-bottom:20px;display:block;margin-top:10px;">` + code + `</b>
+					5分钟内有效，为了您的帐号安全，请勿泄露给他人。</div>
+				<div style="color:#898989;font-size:10px;background:#fcfcfc;padding:18px 30px;">本邮件由系统自动发出，请勿直接回复。 谢谢！</div>
+				</div>
+				</div>`
+
 	m := gomail.NewMessage()
 	m.SetHeader("From", mailConn["user"])
 	m.SetHeader("From", m.FormatAddress(mailConn["user"], "kortho官方"))
@@ -519,8 +475,6 @@ func (s *Server) sendEmail(mailTo string, code string) error {
 	m.SetHeader("Subject", "账户注册邮箱验证") //设置邮件主题
 	m.SetBody("text/html", strMsg)     //设置邮件正文
 
-	fmt.Println(mailTo, code, mailConn["host"], port, mailConn["user"], mailConn["pass"])
-	fmt.Println(strMsg)
 	d := gomail.NewDialer(mailConn["host"], port, mailConn["user"], mailConn["pass"])
 	err = d.DialAndSend(m)
 	return err
