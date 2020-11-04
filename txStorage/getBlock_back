@@ -1,0 +1,695 @@
+package main
+
+import (
+	"bufio"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"kortho/api"
+	"kortho/block"
+	"kortho/blockchain"
+	"kortho/config"
+	"kortho/logger"
+	"kortho/transaction"
+	"kortho/types"
+	_ "net/http/pprof"
+
+	"github.com/astaxie/beego/httplib"
+	"go.uber.org/zap"
+)
+
+// func main() {
+// 	cfg, err := config.LoadConfig()
+// 	if err != nil {
+// 		fmt.Println("load config failed:", err)
+// 		os.Exit(-1)
+// 	}
+
+// 	transaction.InitAdmin(cfg.APIConfig.RPCConfig.AdminAddr)
+
+// 	if err = logger.InitLogger(cfg.LogConfig); err != nil {
+// 		fmt.Println("logger.InitLogger failed:", err)
+// 		os.Exit(-1)
+// 	}
+
+// 	bc := blockchain.New()
+
+// 	if cfg.APIConfig == nil {
+// 		logger.Error("load APIConfig failed!")
+// 		os.Exit(-1)
+// 	}
+// 	api.Start(cfg.APIConfig, bc, nil, nil)
+
+// }
+
+// import (
+// 	"encoding/hex"
+// 	"encoding/json"
+// 	"fmt"
+// 	"strings"
+// 	"time"
+
+// 	"bufio"
+// 	"os"
+
+// 	"github.com/astaxie/beego/httplib"
+// 	"github.com/recover/api"
+// 	blockchain "github.com/recover/blcokchain"
+// 	"github.com/recover/block"
+// 	"github.com/recover/config"
+// 	"github.com/recover/logger"
+// 	transaction "github.com/recover/transction"
+// 	"github.com/recover/types"
+// 	"go.uber.org/zap"
+// )
+
+var filePath string = "./address.txt"
+
+//var oldbc *blockchain.Blockchain = blockchain.Olddb()
+var newbc *blockchain.Blockchain = blockchain.New()
+
+var currentHeight uint64
+var maxHeight uint64
+
+var NewBlockNUm int64
+var ch = make(chan bool)
+var file *os.File
+
+func fileopen() {
+	files, err := os.OpenFile(filePath, os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Println("文件打开失败", err)
+	}
+	file = files
+}
+
+func chuangshikuai() {
+
+	var bl block.Block
+	bm, err := types.StringToAddress("Kto9sFhbjDdjEHvcdH6n9dtQws1m4ptsAWAy7DhqGdrUFai")
+	if err != nil {
+		fmt.Println("GetMaxBlockHeight in :%v", err)
+		return
+	}
+	bl.Miner = *bm
+	bl.PrevHash = nil
+	bl.Height = 1
+	bl.Root = nil
+	bl.Timestamp = 1579189230
+	bl.Version = 1
+	bl.Transactions = func() []*transaction.Transaction {
+		tr := transaction.NewCoinBaseTransaction(*bm, 1000000000000000000)
+		tr.Tag = 1
+		tr.BlockNumber = 1
+		var ts []*transaction.Transaction
+		ts = append(ts, tr)
+		return ts
+	}()
+	bl.SetHash()
+	fmt.Println(bl)
+	newbc.AddBlock(&bl, []byte("KtoC5gP1TLyUWbHRkp1gfpMrbdBawnqxQi3NdYtB31dgtJE"))
+}
+
+func init() {
+	fileopen()
+	cfg := config.LogConfigInfo{}
+	cfg.FileName = "./recover.log"
+	cfg.Level = "DEBUG"
+	cfg.MaxSize = 100
+	cfg.MaxAge = 10
+	cfg.MaxBackups = 10
+	cfg.Comperss = true
+	if err := logger.InitLogger(&cfg); err != nil {
+		fmt.Println("logger.InitLogger failed:", err)
+		os.Exit(-1)
+	}
+	//初始化 第一个区块信息
+
+}
+
+func main() {
+
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		fmt.Println("load config failed:", err)
+		os.Exit(-1)
+	}
+
+	transaction.InitAdmin(cfg.APIConfig.RPCConfig.AdminAddr)
+
+	if err = logger.InitLogger(cfg.LogConfig); err != nil {
+		fmt.Println("logger.InitLogger failed:", err)
+		os.Exit(-1)
+	}
+
+	//bc := blockchain.New()
+
+	if cfg.APIConfig == nil {
+		logger.Error("load APIConfig failed!")
+		os.Exit(-1)
+	}
+	go api.Start(cfg.APIConfig, newbc, nil, nil)
+
+	go mintorktoMaxHeight()
+	// go api.Start("0.0.0.0:12345", newbc)
+
+	he, err := newbc.GetMaxBlockHeight()
+	if err != nil {
+		logger.Info("GetMaxBlockHeight err ", zap.Error(err))
+		return
+	}
+	currentHeight = he + 1
+	for {
+		if currentHeight >= uint64(NewBlockNUm) {
+			time.Sleep(time.Second * 5)
+			continue
+		}
+		c := NewBlockNUm - int64(currentHeight)
+		fmt.Println("kto-当前区块", currentHeight, ",最新区块=", NewBlockNUm, ",区块相差=", c)
+
+	Loop03:
+		post := httplib.Post("http://106.12.9.134:12345/GetBlockbyNum")
+		post.JSONBody(map[string]interface{}{"num": currentHeight})
+		s, err := post.Bytes()
+		if err != nil {
+			if strings.Contains(err.Error(), "timeout") {
+				goto Loop03
+			}
+			logger.Info("err=", zap.Error(err))
+			goto Loop03
+		}
+		var respData struct {
+			ErrorCode int       `json:"errorcode"`
+			ErrorMsg  string    `json:"errormsg"`
+			Block     RespBlock `json:"block"`
+		}
+		json.Unmarshal(s, &respData)
+		var bl block.Block
+		m, err := types.StringToAddress(respData.Block.Miner)
+		if err != nil {
+			logger.Info("err1=", zap.Error(err))
+			return
+		}
+		bl.Miner = *m
+		preHash, err := hex.DecodeString(respData.Block.PrevBlockHash)
+		if err != nil {
+			logger.Info("err2=", zap.Error(err))
+			return
+		}
+		bl.PrevHash = preHash
+		bl.Height = respData.Block.Height
+		bl.Root, err = hex.DecodeString(respData.Block.Root)
+		if err != nil {
+			logger.Info("err3=", zap.Error(err))
+			return
+		}
+		bl.Timestamp = respData.Block.Timestamp
+		bl.Version = respData.Block.Version
+		bl.Hash, err = hex.DecodeString(respData.Block.Hash)
+		if err != nil {
+			logger.Info("err4=", zap.Error(err))
+			return
+		}
+		bl.Transactions = func() []*transaction.Transaction {
+			var ts []*transaction.Transaction
+			for _, v := range respData.Block.FirstTx {
+				ma, _ := types.StringToAddress(v.RecAddress)
+				tr := transaction.NewCoinBaseTransaction(*ma, v.Amount)
+				ts = append(ts, tr)
+			}
+
+			for _, v := range respData.Block.Txs {
+				var t transaction.Transaction
+				t.Hash, err = hex.DecodeString(v.Hash)
+				t.Root, err = hex.DecodeString(v.Root)
+				t.Amount = v.Amount
+				t.BlockNumber = v.BlockNumber
+				t.Fee = v.Fee
+				f, err := types.StringToAddress(v.From)
+				if err != nil {
+					logger.Info("err5=", zap.Error(err))
+					return nil
+				}
+				t.From = *f
+				t.Nonce = v.Nonce
+				t.Signature, err = hex.DecodeString(v.Signature)
+				t.Script = v.Script
+				t.Time = v.Time
+				taddr, err := types.StringToAddress(v.To)
+				if err != nil {
+					logger.Info("err6=", zap.Error(err))
+					return nil
+				}
+				t.To = *taddr
+				t.Tag = v.Tag
+				t.PckNum = v.PckNum
+				t.KtoNum = v.KtoNum
+
+				o := &transaction.Order{}
+
+				t.Order = func() *transaction.Order {
+					if v.Order == nil || len(v.Order.ID) == 0 || v.Order.ID == "0" {
+						return nil
+					}
+					o.Signature, err = hex.DecodeString(v.Order.Signature)
+					o.Hash, err = hex.DecodeString(v.Order.Hash)
+					oa, err := types.StringToAddress(v.Order.Address)
+					if err != nil {
+						logger.Info("err7=", zap.Error(err))
+						return nil
+					}
+					o.Address = *oa
+					o.Ciphertext, err = hex.DecodeString(v.Order.Ciphertext)
+					o.ID, err = hex.DecodeString(v.Order.ID)
+					o.Price = v.Order.Price
+					o.Region = v.Order.Region
+					o.Tradename = v.Order.Tradename
+					return o
+				}()
+				ts = append(ts, &t)
+				if !t.IsCoinBaseTransaction() {
+					writefile(t.From.String())
+					if !t.To.IsNil() {
+						writefile(t.To.String())
+					}
+
+				}
+			}
+			return ts
+		}()
+
+		if err := newbc.AddBlock(&bl, bl.Miner.Bytes()); err != nil {
+			fmt.Println("AddBlock is err:", err)
+			return
+		}
+		currentHeight++
+		fmt.Println("add block ", bl.Height, "over")
+	}
+
+	file.Close()
+
+}
+
+func mintorktoMaxHeight() {
+
+	fmt.Println("=========mintorktoMaxHeight========")
+	for {
+	Loop02:
+		post := httplib.Post("http://106.12.9.134:12345/GetMaxBlockNum")
+		s, err := post.Bytes()
+		if err != nil {
+			if strings.Contains(err.Error(), "timeout") {
+				goto Loop02
+			}
+			logger.Info("err=", zap.Error(err))
+			return
+		}
+		var respData struct {
+			ErrorCode int    `json:"errorcode"`
+			ErrorMsg  string `json:"errormsg"`
+			Height    int64  `json:"height"`
+		}
+		json.Unmarshal(s, &respData)
+		NewBlockNUm = respData.Height
+		time.Sleep(time.Second * 5)
+	}
+
+}
+func writefile(address string) {
+
+	write := bufio.NewWriter(file)
+	write.WriteString(address + "\n")
+	write.Flush()
+}
+
+type Order struct {
+	// ID 订单号，这是有外部的订单系统传入
+	ID         string `json:"id,omitempty"`
+	Address    string `json:"address,omitempty"`
+	Price      uint64 `json:"price,omitempty"`
+	Hash       string `json:"hash,omitempty"`
+	Ciphertext string `json:"ciphertext,omitempty"`
+	Signature  string `json:"signature,omitempty"`
+	Tradename  string `json:"tradename,omitempty"`
+	Region     string `json:"region,omitempty"`
+}
+type MinerTx struct {
+	Amount     uint64 `json:"amount"`
+	RecAddress string `json:"recaddress"`
+}
+type RespBlock struct {
+	Height        uint64         `json:"height"`
+	PrevBlockHash string         `json:"prevblockhash"`
+	Txs           []*Transaction `json:"txs,omitempty"`
+	Root          string         `json:"root"`
+	Version       uint64         `json:"version"`
+	Timestamp     int64          `json:"timestamp"`
+	Hash          string         `json:"hash"`
+	Miner         string         `json:"miner"`
+	FirstTx       []MinerTx      `json:"firsttx"`
+}
+
+type Transaction struct {
+	//Nonce 自增的正整数，同一地址当前交易必定比上次大一
+	Nonce uint64 `json:"nonce,omitempty"`
+	// BlockNumber 当前交易所在块的块高
+	BlockNumber uint64 `json:"blocknumber,omitempty"`
+	// Amount 交易的金额
+	Amount uint64 `json:"amount,omitempty"`
+	// From 交易的发起方地址
+	From string `json:"from,omitempty"`
+	// To 交易的接收方地址
+	To string `json:"to"`
+	// Hash 交易hash
+	Hash string `json:"hash,omitempty"`
+	// Signature 交易的签名
+	Signature string `json:"signature,omitempty"`
+	// Time 发起交易的时间时间戳，以秒为单位
+	Time int64 `json:"time,omitempty"`
+	// Root 交易的默克尔根，用来进行交易数据的快速对比
+	Root string `json:"root,omitempty"`
+	// Sctipt 代币的名称，非代币交易该字符串长度为0
+	Script string `json:"script,omitempty"`
+	// Fee 代币交易的手续费，如果不是代币交易，此项为0
+	Fee uint64 `json:"fee,omitempty"`
+	// Order 交易中携带的订单数据，没有订单此项为nil
+	Order *Order `json:"ord,omitempty"`
+	Tag   int32  `json:"tag"`
+
+	// Order 交易中携带的订单数据，没有订单此项为nil
+
+	// KtoNum
+	KtoNum uint64 `json:"ktonum"`
+
+	// PckNum
+	PckNum uint64 `json:"pcknum"`
+}
+
+
+++++++++++++++++++++++++++++++++++++++++++
+package txStorage
+
+import (
+	"encoding/json"
+	"kortho/blockchain"
+	"kortho/types"
+	"log"
+	"os"
+	"strings"
+	"time"
+
+	"database/sql"
+
+	"github.com/astaxie/beego/httplib"
+	_ "github.com/go-sql-driver/mysql"
+)
+
+type TxStorage struct {
+	currentHeght uint64
+	db           *sql.DB
+	blockDB      *blockchain.Blockchain
+}
+
+//ReqBlockrpc requests blocks from height 'LowH' to 'HeiH'.
+type ReqBlockrpc struct {
+	GetLeader    bool
+	Addr         string //request address
+	ReqMaxHeight bool   //request leader max block height
+	ReqBlocks    bool   //request leader blocks from height 'LowH' to 'HeiH'
+	LowH         uint64 //form LowH
+	HeiH         uint64 //to HeiH
+}
+
+//ReSBlockrpc result info
+type ReSBlockrpc struct {
+	Data       []byte //blocks data
+	LeaderAddr string
+	MaxHieght  uint64 //leader max block height
+}
+
+type Order struct {
+	Id         string `json:"id"`
+	Address    string `json:"address"`
+	Price      uint64 `json:"price"`
+	Hash       string `json:"hash"`
+	Signature  string `json:"signature"`
+	Ciphertext string `json:"ciphertext"`
+	Tradename  string `json:"tradename"`
+	Region     string `json:"region"`
+}
+
+type Transaction struct {
+	Nonce       uint64 `json:"nonce"`
+	BlockNumber uint64 `json:"blocknumber"`
+	Amount      uint64 `json:"amount"`
+	From        string `json:"from"`
+	To          string `json:"to"`
+	Hash        string `json:"hash"`
+	Signature   string `json:"signature"`
+	Time        int64  `json:"time"`
+	Script      string `json:"script"`
+	Ord         Order  `json:"ord"`
+	KtoNum      uint64 `json:"ktonum"`
+	PckNum      uint64 `json:"pcknum"`
+	Tag         int32  `json:"tag"`
+}
+type MinerTx struct {
+	Amount     uint64 `json:"amount"`
+	RecAddress string `json:"recaddress"`
+}
+type RespBlock struct {
+	Height        uint64         `json:"height"`
+	PrevBlockHash string         `json:"prevblockhash"`
+	Txs           []*Transaction `json:"txs,omitempty"`
+	Root          string         `json:"root"`
+	Version       uint64         `json:"version"`
+	Timestamp     int64          `json:"timestamp"`
+	Hash          string         `json:"hash"`
+	Miner         string         `json:"miner"`
+	FirstTx       []MinerTx      `json:"firsttx"`
+}
+
+const (
+	K_ASCII         = 75
+	SQLERR_1062     = "PRIMARY"
+	SELECTMAXHEIGHT = "select max_height from max_height where id=?" //table max_height stores the max height.
+	INSERTMAXHEIGHT = "INSERT INTO max_height (id,max_height) VALUES (?,?)"
+	UPDATEMAXHEIGHT = "update max_height set max_height=? where id=?"
+	INSERTTXDATA    = "INSERT INTO txdata (tx_height,tx_hash,tx_from,tx_to,tx_data) values(?,?,?,?,?)" //table txdata stores every tx data.
+
+	TargetAddr = "182.61.177.227:6363"
+)
+
+var Max_Height uint64
+
+func (ts *TxStorage) Run(db *sql.DB) {
+	ts.db = db
+	defer ts.db.Close()
+	currentH, err := ts.getMaxHeightFromTable()
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+	log.Println("get max height:", currentH)
+	ts.currentHeght = currentH
+	ts.blockDB = blockchain.New()
+
+	maxH, err := ts.blockDB.GetMaxBlockHeight()
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
+
+	Max_Height = maxH
+
+	for {
+		time.Sleep(time.Millisecond)
+		err := ts.saveTxDataToDB(ts.currentHeght)
+		if err != nil {
+			if contain := strings.Contains(err.Error(), SQLERR_1062); !contain {
+				//if contain := strings.Contains(err.Error(), "NotExist"); !contain {
+				log.Println(err)
+				continue
+				//}
+			}
+		}
+
+		err = ts.updateMaxHeight()
+		if err != nil {
+			log.Printf("updateMaxHeight error: %v\n", err)
+		}
+		ts.currentHeght++
+	}
+}
+
+func AddressToByte(a types.Address) []byte {
+	var b []byte
+	b = a[:]
+	return b
+}
+
+func (ts *TxStorage) getBlockbyHeight(height uint64) ([]*Transaction, error) {
+	// conn, err := rpc.DialHTTP("tcp", TargetAddr)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// defer conn.Close()
+
+	// req := ReqBlockrpc{
+	// 	ReqBlocks: true,
+	// 	LowH:      height,
+	// }
+	// res := ReSBlockrpc{}
+	// err = conn.Call("RequestManage.HandleGetBlockByHeight", req, &res)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("Call HandleGetBlockByHeight error:%v", err)
+	// }
+
+	// return res.Data, nil
+	post := httplib.Post("http://106.12.9.134:12345/GetBlockbyNum")
+	post.JSONBody(map[string]interface{}{"num": height})
+	s, err := post.Bytes()
+	if err != nil {
+		return nil, err
+	}
+	var respData struct {
+		ErrorCode int       `json:"errorcode"`
+		ErrorMsg  string    `json:"errormsg"`
+		Block     RespBlock `json:"block"`
+	}
+	err = json.Unmarshal(s, &respData)
+	if err != nil {
+		return nil, err
+	}
+	return respData.Block.Txs, nil
+}
+
+func (ts *TxStorage) saveTxDataToDB(height uint64) error {
+	txs, err := ts.getBlockbyHeight(height)
+	if err != nil {
+		return err
+	}
+
+	for _, tmpTx := range txs {
+		if checkAddr(tmpTx.From) && checkAddr(tmpTx.To) {
+			txData, err := json.Marshal(&tmpTx)
+			if err != nil {
+				return err
+			}
+			res, err := ts.db.Exec(INSERTTXDATA, tmpTx.BlockNumber, tmpTx.Hash, tmpTx.From, tmpTx.To, string(txData))
+			if err != nil {
+				return err
+			}
+			printInfo := "Stored txdata:{\nblock_height = %v\ntx_hash = %v\ntx_from = %v\ntx_to = %v\ntx_data len = %v,from addr len = %v,to addr len = %v}\n"
+			log.Printf(printInfo, tmpTx.BlockNumber, tmpTx.Hash, tmpTx.From, tmpTx.To, len(string(txData)), len(tmpTx.From), len(tmpTx.To))
+			if res != nil {
+				ra, _ := res.RowsAffected()
+				log.Printf("RowsAffected: %v.\n\n", ra)
+			}
+		}
+	}
+
+	/*
+		if height > Max_Height {
+			log.Printf("height[%v] over DB max block height[%v]!\n", height, Max_Height)
+			os.Exit(0)
+		}
+
+		b, err := ts.blockDB.GetBlockByHeight(height)
+		if err != nil {
+			return err
+		}
+
+		for _, tx := range b.Transactions {
+			if checkAddr(tx.From.String()) && checkAddr(tx.To.String()) {
+
+				var tmpTx Transaction
+				tmpTx.Hash = hex.EncodeToString(tx.Hash)
+				tmpTx.From = string(AddressToByte(tx.From))
+				tmpTx.Amount = tx.Amount
+				tmpTx.Nonce = tx.Nonce
+				tmpTx.To = string(AddressToByte(tx.To))
+				tmpTx.Signature = hex.EncodeToString(tx.Signature)
+				tmpTx.Time = tx.Time
+				tmpTx.BlockNumber = tx.BlockNumber
+				tmpTx.Script = tx.Script
+				tmpTx.KtoNum = tx.KtoNum
+				tmpTx.PckNum = tx.PckNum
+				tmpTx.Tag = tx.Tag
+
+				tmpTx.Ord.Id = string(tx.Order.ID)
+				tmpTx.Ord.Hash = hex.EncodeToString(tx.Order.Hash)
+				tmpTx.Ord.Signature = hex.EncodeToString(tx.Order.Signature)
+				tmpTx.Ord.Ciphertext = hex.EncodeToString(tx.Order.Ciphertext)
+				tmpTx.Ord.Address = string(AddressToByte(tx.Order.Address))
+				tmpTx.Ord.Price = tx.Order.Price
+
+				txData, err := json.Marshal(&tmpTx)
+				if err != nil {
+					return err
+				}
+
+				res, err := ts.db.Exec(INSERTTXDATA, tmpTx.BlockNumber, tmpTx.Hash, tmpTx.From, tmpTx.To, string(txData))
+				if err != nil {
+					return err
+				}
+				printInfo := "Stored txdata:{\nblock_height = %v\ntx_hash = %v\ntx_from = %v\ntx_to = %v\ntx_data len = %v,from addr len = %v,to addr len = %v}\n"
+				log.Printf(printInfo, tmpTx.BlockNumber, tmpTx.Hash, tmpTx.From, tmpTx.To, len(string(txData)), len(tmpTx.From), len(tmpTx.To))
+				if res != nil {
+					ra, _ := res.RowsAffected()
+					log.Printf("RowsAffected: %v.\n\n", ra)
+				}
+			}
+		}
+	*/
+	return nil
+}
+
+func checkAddr(address string) bool {
+	addr := address
+	if len(addr) > 0 {
+		ad := []rune(addr)
+		if ad[0] == K_ASCII {
+			return true
+		}
+	}
+	return false
+}
+
+func (ts *TxStorage) getMaxHeightFromTable() (uint64, error) {
+	rows, err := ts.db.Query(SELECTMAXHEIGHT, 1)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	var currentH uint64
+	if rows.Next() {
+		rows.Scan(&currentH)
+	}
+	if rows.Err() != nil {
+		return 0, rows.Err()
+	}
+
+	if currentH == 0 {
+		_, err := ts.db.Exec(INSERTMAXHEIGHT, 1, 1)
+		if err != nil {
+			return 0, err
+		}
+		currentH++
+		return currentH, nil
+	}
+
+	return currentH, nil
+}
+
+func (ts *TxStorage) updateMaxHeight() error {
+	_, err := ts.db.Exec(UPDATEMAXHEIGHT, ts.currentHeght, 1)
+	if err != nil {
+		return err
+	}
+	return nil
+}
